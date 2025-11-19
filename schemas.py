@@ -1,48 +1,45 @@
 """
-Database Schemas
+Database Schemas for FindRivals
 
-Define your MongoDB collection schemas here using Pydantic models.
-These schemas are used for data validation in your application.
-
-Each Pydantic model represents a collection in your database.
-Model name is converted to lowercase for the collection name:
-- User -> "user" collection
-- Product -> "product" collection
-- BlogPost -> "blogs" collection
+Each Pydantic model represents a collection in MongoDB. The collection name
+is the lowercase of the class name.
 """
-
+from typing import List, Optional, Literal
 from pydantic import BaseModel, Field
-from typing import Optional
 
-# Example schemas (replace with your own):
+# ---------------------------
+# Core Domain Schemas
+# ---------------------------
+Sport = Literal["cricket", "football", "kabaddi", "shuttle", "tennis"]
+TimeSlot = Literal["morning", "afternoon", "evening"]
+ContactPref = Literal["call", "text"]
 
-class User(BaseModel):
-    """
-    Users collection schema
-    Collection name: "user" (lowercase of class name)
-    """
-    name: str = Field(..., description="Full name")
-    email: str = Field(..., description="Email address")
-    address: str = Field(..., description="Address")
-    age: Optional[int] = Field(None, ge=0, le=120, description="Age in years")
-    is_active: bool = Field(True, description="Whether user is active")
 
-class Product(BaseModel):
-    """
-    Products collection schema
-    Collection name: "product" (lowercase of class name)
-    """
-    title: str = Field(..., description="Product title")
-    description: Optional[str] = Field(None, description="Product description")
-    price: float = Field(..., ge=0, description="Price in dollars")
-    category: str = Field(..., description="Product category")
-    in_stock: bool = Field(True, description="Whether product is in stock")
+class Team(BaseModel):
+    team_name: str = Field(..., description="Team name")
+    sport: Sport = Field(..., description="Primary sport")
+    players: List[str] = Field(default_factory=list, description="List of player names")
+    location_name: Optional[str] = Field(None, description="Area or place name")
+    latitude: Optional[float] = Field(None, description="Latitude for geofilters")
+    longitude: Optional[float] = Field(None, description="Longitude for geofilters")
+    contact_preference: ContactPref = Field(..., description="Preferred contact method")
+    contact_number: str = Field(..., description="Phone number")
+    availability: List[TimeSlot] = Field(default_factory=list, description="Available times of day")
+    team_id: str = Field(..., description="Auto-generated team identifier like CRK-129")
 
-# Add your own schemas here:
-# --------------------------------------------------
 
-# Note: The Flames database viewer will automatically:
-# 1. Read these schemas from GET /schema endpoint
-# 2. Use them for document validation when creating/editing
-# 3. Handle all database operations (CRUD) directly
-# 4. You don't need to create any database endpoints!
+class Matchpost(BaseModel):
+    team_id: str = Field(..., description="Posting team ID")
+    sport: Sport = Field(..., description="Sport for the match")
+    num_players: int = Field(..., ge=1, description="Number of players needed")
+    time_pref: TimeSlot = Field(..., description="Preferred time slot")
+    note: Optional[str] = Field(None, description="Optional note")
+    location_name: Optional[str] = Field(None)
+    latitude: Optional[float] = Field(None)
+    longitude: Optional[float] = Field(None)
+
+
+class Message(BaseModel):
+    from_team_id: str = Field(...)
+    to_team_id: str = Field(...)
+    text: str = Field(..., min_length=1, max_length=2000)
