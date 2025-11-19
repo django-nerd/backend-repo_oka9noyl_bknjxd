@@ -33,7 +33,7 @@ SPORT_PREFIX = {
 
 def generate_team_id(sport: str) -> str:
     prefix = SPORT_PREFIX.get(sport, "TMP")
-    # Use count of existing teams for this sport + random suffix
+    # Use count of existing teams for this sport + incremental suffix
     try:
         count = db["team"].count_documents({"sport": sport}) if db else 0
     except Exception:
@@ -107,6 +107,9 @@ class TeamCreate(BaseModel):
 
 @app.post("/teams", response_model=dict)
 def register_team(payload: TeamCreate):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not available. Please try again later.")
+
     # Ensure players unique across teams (soft check by name)
     if payload.players:
         existing = db["team"].find_one({"players": {"$in": payload.players}})
@@ -132,6 +135,8 @@ def register_team(payload: TeamCreate):
 
 @app.get("/teams", response_model=list)
 def list_teams(sport: Optional[str] = None):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not available. Please try again later.")
     q = {"sport": sport} if sport else {}
     items = get_documents("team", q)
     # stringify _id for frontend
@@ -142,6 +147,8 @@ def list_teams(sport: Optional[str] = None):
 
 @app.get("/teams/{team_id}", response_model=dict)
 def get_team(team_id: str):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not available. Please try again later.")
     doc = db["team"].find_one({"team_id": team_id})
     if not doc:
         raise HTTPException(status_code=404, detail="Team not found")
@@ -162,6 +169,8 @@ class MatchCreate(BaseModel):
 
 @app.post("/matchposts", response_model=dict)
 def create_match_post(payload: MatchCreate):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not available. Please try again later.")
     team = db["team"].find_one({"team_id": payload.team_id})
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
@@ -187,6 +196,8 @@ def match_feed(
     num_players_max: Optional[int] = Query(None, ge=1),
     note_contains: Optional[str] = None,
 ):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not available. Please try again later.")
     q: dict = {}
     if sport:
         q["sport"] = sport
@@ -202,7 +213,18 @@ def match_feed(
     if note_contains:
         q["note"] = {"$regex": note_contains, "$options": "i"}
 
-    items = get_documents("matchpost", q)
+    try:
+        items = get_documents("matchpost", q)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)[:80]}")
+    # enrich each post with team details (creator info)
+    if items:
+        for it in items:
+            team = db["team"].find_one({"team_id": it.get("team_id")})
+            if team:
+                it["team_name"] = team.get("team_name")
+                it["contact_number"] = team.get("contact_number")
+                it["contact_methods"] = team.get("contact_methods", [])
     for it in items:
         it["id"] = str(it.pop("_id", ""))
     # sort by created_at desc if present
@@ -220,8 +242,13 @@ def nearby_teams(
     center_lon: Optional[float] = Query(None),
     range_km: float = Query(10, ge=1, le=100),
 ):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not available. Please try again later.")
     q = {"sport": sport} if sport else {}
-    teams = get_documents("team", q)
+    try:
+        teams = get_documents("team", q)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)[:80]}")
     result = []
     for t in teams:
         t["id"] = str(t.pop("_id", ""))
@@ -253,6 +280,8 @@ class ChatCreate(BaseModel):
 
 @app.post("/chat", response_model=dict)
 def send_message(payload: ChatCreate):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not available. Please try again later.")
     # Ensure both teams exist
     a = db["team"].find_one({"team_id": payload.from_team_id})
     b = db["team"].find_one({"team_id": payload.to_team_id})
@@ -269,6 +298,8 @@ def send_message(payload: ChatCreate):
 
 @app.get("/chat/{team_a}/{team_b}", response_model=list)
 def get_conversation(team_a: str, team_b: str):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not available. Please try again later.")
     msgs = get_documents(
         "message",
         {"$or": [
@@ -294,6 +325,8 @@ def admin_stats():
 
 @app.delete("/admin/teams/{team_id}", response_model=dict)
 def admin_delete_team(team_id: str):
+    if db is None:
+        raise HTTPException(status_code=500, detail="Database not available. Please try again later.")
     res = db["team"].delete_one({"team_id": team_id})
     return {"deleted": res.deleted_count == 1}
 
