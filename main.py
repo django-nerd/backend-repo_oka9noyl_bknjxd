@@ -97,9 +97,10 @@ class TeamCreate(BaseModel):
     sport: str
     players: List[str] = []
     location_name: Optional[str] = None
+    # Coordinates are optional and set via "Use my location"; UI doesn't ask to type them
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    contact_preference: str
+    contact_methods: List[str] = []  # e.g., ["call", "text"]
     contact_number: str
     availability: List[str] = []
 
@@ -120,7 +121,7 @@ def register_team(payload: TeamCreate):
         location_name=payload.location_name,
         latitude=payload.latitude,
         longitude=payload.longitude,
-        contact_preference=payload.contact_preference,
+        contact_methods=payload.contact_methods or [],
         contact_number=payload.contact_number,
         availability=payload.availability or [],
         team_id=team_id,
@@ -179,8 +180,28 @@ def create_match_post(payload: MatchCreate):
 
 
 @app.get("/feed", response_model=list)
-def match_feed(sport: Optional[str] = None):
-    q = {"sport": sport} if sport else {}
+def match_feed(
+    sport: Optional[str] = None,
+    time_pref: Optional[str] = None,
+    num_players_min: Optional[int] = Query(None, ge=1),
+    num_players_max: Optional[int] = Query(None, ge=1),
+    note_contains: Optional[str] = None,
+):
+    q: dict = {}
+    if sport:
+        q["sport"] = sport
+    if time_pref:
+        q["time_pref"] = time_pref
+    if num_players_min is not None or num_players_max is not None:
+        rng: dict = {}
+        if num_players_min is not None:
+            rng["$gte"] = num_players_min
+        if num_players_max is not None:
+            rng["$lte"] = num_players_max
+        q["num_players"] = rng
+    if note_contains:
+        q["note"] = {"$regex": note_contains, "$options": "i"}
+
     items = get_documents("matchpost", q)
     for it in items:
         it["id"] = str(it.pop("_id", ""))

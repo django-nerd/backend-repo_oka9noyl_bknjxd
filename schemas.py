@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 # ---------------------------
 Sport = Literal["cricket", "football", "kabaddi", "shuttle", "tennis"]
 TimeSlot = Literal["morning", "afternoon", "evening"]
-ContactPref = Literal["call", "text"]
+ContactMethod = Literal["call", "text"]
 
 
 class Team(BaseModel):
@@ -22,7 +22,7 @@ class Team(BaseModel):
     location_name: Optional[str] = Field(None, description="Area or place name")
     latitude: Optional[float] = Field(None, description="Latitude for geofilters")
     longitude: Optional[float] = Field(None, description="Longitude for geofilters")
-    contact_preference: ContactPref = Field(..., description="Preferred contact method")
+    contact_methods: List[ContactMethod] = Field(default_factory=list, description="Allowed contact methods")
     contact_number: str = Field(..., description="Phone number")
     availability: List[TimeSlot] = Field(default_factory=list, description="Available times of day")
     team_id: str = Field(..., description="Auto-generated team identifier like CRK-129")
